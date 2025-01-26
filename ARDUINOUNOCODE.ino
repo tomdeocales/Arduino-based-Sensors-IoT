@@ -1,141 +1,64 @@
-#include <WiFi.h>
-#include <FirebaseESP32.h>
+Arduino Uno
+const long readInterval = 1000; 
 
-// Firebase and WiFi credentials
-#define FIREBASE_HOST "aquasense-85f49-default-rtdb.asia-southeast1.firebasedatabase.app"
-#define FIREBASE_AUTH "TaxL7hxeTW7hKUe561sTpKGVvBqZQWTwx9EfHuA5"
-#define WIFI_SSID "HUAWEI-zzD9"
-#define WIFI_PASSWORD "Ky4mvHM7"
+unsigned long lastReadMillis = 0; // Store the last time a reading was made
 
-// SIM900A Configuration
-#define RX_PIN 16  // GPIO 16 for RX (SIM900A TX)
-#define TX_PIN 17  // GPIO 17 for TX (SIM900A RX)
-HardwareSerial mySerial(1);  // Use Serial1 for SIM900A communication
+//TURBIDITY
+int sensorPin = A1; // A0 for Arduino
+//PH
+float calibration_value = 21.34 - 0.7;
+int phval = 0; 
+unsigned long int avgval; 
+int buffer_arr[10],temp; 
+float ph_act;
+float sensorValue = 0;
+float voltage = 0;
+float turbidity = 0;
 
-FirebaseData firebaseData;
-FirebaseAuth auth;
-FirebaseConfig config;
+float volt = 0;
 
-// Threshold values
-float temperatureMin = 25.0, temperatureMax = 31.0;
-float pHMin = 6.5, pHMax = 9.0;
-float dissolvedOxygenMin = 5.0, dissolvedOxygenMax = 1000.0;
-float turbidityMax = 50.0;
-float chlorophyllMax = 30.0;
-
-// Variables to track the last timestamps
-String lastCurrentDataTimestamp = "";
-String lastCurrentPredictionTimestamp = "";
-
-// SMS function
-void sendSMS(String phoneNumber, String message) {
-  mySerial.println("AT");
-  delay(1000);
-  mySerial.println("AT+CMGF=1");  // Set SMS mode to text
-  delay(1000);
-  mySerial.print("AT+CMGS=\"");
-  mySerial.print(phoneNumber);
-  mySerial.println("\"");
-  delay(1000);
-  mySerial.println(message);
-  mySerial.write(26);  // End-of-message character (Ctrl+Z)
-  delay(3000);
-}
-
-// Function to check thresholds and send SMS
-void checkThresholds(String key, float value, float min, float max, String unit) {
-  if (value < min || value > max) {
-    String alertMessage = key + " value " + String(value, 1) + " " + unit +
-                          (value < min ? " is below the minimum threshold of " : " exceeds the maximum threshold of ") +
-                          String(value < min ? min : max) + " " + unit + ".";
-    sendSMS("+639770710102", alertMessage);  // Replace with recipient's phone number
-  }
-}
-
-void setup() {
+void setup() { 
   Serial.begin(115200);
-
-  // Initialize SIM900A
-  mySerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
-  delay(3000);  // Allow time for SIM900A to initialize
-
-  // Connect to WiFi
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  Serial.print("Connecting to Wi-Fi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\nConnected to Wi-Fi");
-
-  // Configure Firebase
-  config.host = FIREBASE_HOST;
-  config.signer.tokens.legacy_token = FIREBASE_AUTH;
-  Firebase.begin(&config, &auth);
-  Firebase.reconnectWiFi(true);
-
-  Serial.println("Ready for Firebase monitoring...");
 }
 
 void loop() {
-  // Monitor CurrentData for changes
-  if (Firebase.getJSON(firebaseData, "/CurrentData")) {
-    FirebaseJson jsonData = firebaseData.jsonObject();
-    FirebaseJsonData jsonDataValue;
+  unsigned long currentMillis = millis();
 
-    // Check timestamp
-    if (jsonData.get(jsonDataValue, "timestamp")) {
-      String currentDataTimestamp = jsonDataValue.stringValue;
-      if (currentDataTimestamp != lastCurrentDataTimestamp) {
-        lastCurrentDataTimestamp = currentDataTimestamp;
-
-        // Check thresholds for parameters
-        if (jsonData.get(jsonDataValue, "Temperature")) {
-          float temperatureValue = atof(jsonDataValue.stringValue.c_str());
-          checkThresholds("Temperature", temperatureValue, temperatureMin, temperatureMax, "Degree Celsius");
-        }
-
-        if (jsonData.get(jsonDataValue, "pH")) {
-          float pHValue = atof(jsonDataValue.stringValue.c_str());
-          checkThresholds("pH", pHValue, pHMin, pHMax, "pH");
-        }
-
-        if (jsonData.get(jsonDataValue, "DissolvedOxygen")) {
-          float doValue = atof(jsonDataValue.stringValue.c_str());
-          checkThresholds("Dissolved Oxygen", doValue, dissolvedOxygenMin, dissolvedOxygenMax, "mg/L");
-        }
-
-        if (jsonData.get(jsonDataValue, "Turbidity")) {
-          float turbidityValue = atof(jsonDataValue.stringValue.c_str());
-          checkThresholds("Turbidity", turbidityValue, 0, turbidityMax, "FNU");
-        }
+  // Check if it's time to read the temperature (every second)
+  if (currentMillis - lastReadMillis >= readInterval) {
+    lastReadMillis = currentMillis; 
+    //Turbidity
+    sensorValue = analogRead(sensorPin);
+    voltage = sensorValue * (3.3 / 1024.0);
+    
+    // Calculate turbidity as a float, mapping from 0-202 to 100-0
+    turbidity = map(sensorValue, 0, 205, 100, 0);
+    turbidity = max(turbidity, 1); // Ensure turbidity does not drop below 0.1
+    
+    //ph
+    for(int i=0;i<10;i++) 
+      { 
+      buffer_arr[i]=analogRead(A0);
+      delay(30);
       }
-    }
-  } else {
-    Serial.println("Failed to read CurrentData: " + firebaseData.errorReason());
-  }
-
-  // Monitor CurrentPrediction for changes
-  if (Firebase.getJSON(firebaseData, "/CurrentPrediction")) {
-    FirebaseJson jsonPrediction = firebaseData.jsonObject();
-    FirebaseJsonData jsonPredictionValue;
-
-    // Check timestamp
-    if (jsonPrediction.get(jsonPredictionValue, "timestamp")) {
-      String currentPredictionTimestamp = jsonPredictionValue.stringValue;
-      if (currentPredictionTimestamp != lastCurrentPredictionTimestamp) {
-        lastCurrentPredictionTimestamp = currentPredictionTimestamp;
-
-        // Check thresholds for chlorophyll
-        if (jsonPrediction.get(jsonPredictionValue, "Predicted_Chlorophyll")) {
-          float chlorophyllValue = atof(jsonPredictionValue.stringValue.c_str());
-          checkThresholds("Chlorophyll", chlorophyllValue, 0, chlorophyllMax, "ug/L");
+    for(int i=0;i<9;i++)
+      {
+      for(int j=i+1;j<10;j++)
+        {
+          if(buffer_arr[i]>buffer_arr[j])
+            {
+            temp=buffer_arr[i];
+            buffer_arr[i]=buffer_arr[j];
+            buffer_arr[j]=temp;
+            }
         }
-      }
+    }  
+    avgval = 0;
+    for(int i=2;i<8;i++)
+    avgval+=buffer_arr[i];
+    volt=(float)avgval*5.0/1024/6; 
+    ph_act = -5.70 * volt + calibration_value;
+      String output = String(ph_act) + "," + String(turbidity);
+  Serial.println(output); // Send data to ESP8266
     }
-  } else {
-    Serial.println("Failed to read CurrentPrediction: " + firebaseData.errorReason());
-  }
-
-  delay(5000);  // Check every 5 seconds
-} 
+}
