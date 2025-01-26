@@ -57,7 +57,7 @@ float readDO(uint32_t voltage_mv, uint8_t temperature_c) {
 }
 unsigned long previousMillis = 0; // Store the last time a reading was taken
 const long readInterval = 1000; // Interval to read temperature every second
-const long outputInterval = 30000; // Output interval for every 30 seconds
+const long outputInterval = 10800000; // Output interval for every 3 hours
 
 unsigned long lastReadMillis = 0; // Store the last time a reading was made
 float lastCelsius = 0; // Store the last Celsius temperature
