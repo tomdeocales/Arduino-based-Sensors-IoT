@@ -1,4 +1,3 @@
-Arduino Uno
 const long readInterval = 1000; 
 
 unsigned long lastReadMillis = 0; // Store the last time a reading was made
