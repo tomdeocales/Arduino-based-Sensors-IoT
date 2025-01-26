@@ -2,10 +2,10 @@
 #include <FirebaseESP32.h>
 
 // Firebase and WiFi credentials
-#define FIREBASE_HOST "aquasense-85f49-default-rtdb.asia-southeast1.firebasedatabase.app"
-#define FIREBASE_AUTH "TaxL7hxeTW7hKUe561sTpKGVvBqZQWTwx9EfHuA5"
-#define WIFI_SSID "HUAWEI-zzD9"
-#define WIFI_PASSWORD "Ky4mvHM7"
+#define FIREBASE_HOST ""
+#define FIREBASE_AUTH ""
+#define WIFI_SSID ""
+#define WIFI_PASSWORD ""
 
 // SIM900A Configuration
 #define RX_PIN 16  // GPIO 16 for RX (SIM900A TX)
@@ -137,5 +137,5 @@ void loop() {
     Serial.println("Failed to read CurrentPrediction: " + firebaseData.errorReason());
   }
 
-  delay(5000);  // Check every 5 seconds
+  delay(1800000);
 } 
